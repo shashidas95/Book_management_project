@@ -1,0 +1,86 @@
+# 1. Create the Library Model, Migration, and Factory
+php artisan make:model Library -mf
+
+# 2. Create the Category Model, Migration, and Factory
+php artisan make:model Category -mf
+
+# 3. Create the Loan Model and Migration (to track history)
+php artisan make:model Loan -m
+
+# 4. Create the Master Seeder to coordinate everything
+php artisan make:seeder LibrarySystemSeeder
+
+php artisan migrate:fresh --seed --seeder=LibrarySystemSeeder
+
+
+protected $fillable = ['name', 'slug', 'address'];
+
+public function books() { return $this->hasMany(Book::class); }
+public function categories() { return $this->hasMany(Category::class); }
+
+
+protected $fillable = ['library_id', 'name', 'description'];
+
+public function library() { return $this->belongsTo(Library::class); }
+public function books() { return $this->hasMany(Book::class); }
+
+protected $fillable = [
+    'library_id', 'category_id', 'title', 'author', 
+    'isbn', 'published_year', 'total_copies', 'available_copies'
+];
+
+
+
+
+
+Schema::create('books', function (Blueprint $table) {
+            $table->id();
+
+            // Multi-Tenancy: Tie the book to a specific Library/Tenant
+            $table->foreignId('library_id')->constrained('libraries')->onDelete('cascade');
+
+            $table->string('title')->index(); // Added index for faster searching
+            $table->string('author')->index(); // Added index for filtering by author
+
+            // Professional ISBN: 13 digits usually, unique per tenant or globally
+            $table->string('isbn')->unique();
+
+            $table->year('published_year')->nullable();
+
+            // Logic: available_copies should never exceed total_copies
+            $table->unsignedInteger('available_copies')->default(1);
+            $table->unsignedInteger('total_copies')->default(1);
+
+            // Status: Useful for soft-deletes or "archived" books
+            $table->boolean('is_active')->default(true);
+            $table->softDeletes(); // $table->timestamp('deleted_at')
+
+            $table->timestamps();
+        });
+
+
+
+## What other methods could go here?
+As your library manager grows, you might add more "Domain Logic" methods. For example:
+
+## isOverdue(DateTime $dueDate): Logic to check if a loan has expired.
+
+## calculateFine(int $daysLate): Logic to determine how much a user owes based on library policy.
+
+## markAsDamaged(): A method that sets isActive to false and records a status change.
+
+
+public function update(UpdateBookRequest $request, int $id): JsonResponse
+{
+    try {
+        $book = $this->bookService->updateBook($id, $request->validated());
+        return $this->success(new BookResource($book), 'Book updated successfully');
+    } catch (Exception $e) {
+        return $this->error($e->getMessage(), 422);
+    }
+}
+
+
+php artisan make:event app/Infrastructure/Events/PasswordResetRequested
+
+php artisan make:listener SendPasswordResetEmail --event=PasswordResetRequested
